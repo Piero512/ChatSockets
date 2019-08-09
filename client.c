@@ -28,6 +28,7 @@ void* send_loop(void* arg){
     strncpy(msg.from,details->name, sizeof(msg.from) - 1);
     msg.from[sizeof(msg.from) - 1] = 0;
     char* buffer_getline = NULL;
+    msg.m = CHAT_MSG;
     size_t linecap = 0;
     ssize_t linelen;
     while(conn_details.should_poll){
@@ -43,7 +44,7 @@ void* send_loop(void* arg){
                     binn_free(serialized_msg);
                     break;
                 }
-                printf("(%s): %s\n", msg.from, msg.msg); // Local echo.
+                // printf("(%s): %s\n", msg.from, msg.msg); // Local echo.
                 binn_free(serialized_msg);
             } 
         }
@@ -72,8 +73,9 @@ void* receive_loop(void* arg){
                     break;
             }
             free(received_msg);
+        } else {
+            details->should_poll = false;
         }
-        // Continue and ignore invalid msg.
     }
     return NULL;
 }
@@ -98,12 +100,14 @@ int main(int argc, char* argv[]){
     }
     int sockfd = setup_socket(argv[1], argv[2]);
     if(sockfd == -1){
-        fprintf(stderr,"Error al conectar a %s:%s", argv[1], argv[2]);
+        fprintf(stderr,"Error al conectar a %s:%s\n", argv[1], argv[2]);
         return 1;
     }
     conn_details.should_poll = true;
     conn_details.connected_fd = sockfd;
     conn_details.message_queue = StsQueue.create();
+    strncpy(conn_details.name, argv[3], sizeof(conn_details.name) - 1);
+    conn_details.name[sizeof(conn_details.name) -1] = 0;
     pthread_t receive_thread, send_thread;
     pthread_create(&receive_thread, NULL, receive_loop, &conn_details);
     pthread_create(&send_thread, NULL, send_loop, &conn_details);

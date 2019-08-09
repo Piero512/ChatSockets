@@ -51,14 +51,19 @@ void * handle_connections(void* args){
         // poll for a while, and if the FDs have changed, read msgs and send msgs.
         int changed = poll(array_fds, last, 500); // Wait half a second for messages.
         if(changed){
-            for (int i = 0; i < 1024; ++i) {
+            for (int i = 0; i < last; ++i) {
                 struct pollfd* current_fd = (array_fds + i);
                 short revents = current_fd->revents;
                 if(revents & POLLIN){
                     // New data!
                     Message_t * msg = parse_buffer(current_fd->fd);
                     // Send this msg to every client!
-                    resend_msg_to_everyone(msg, array_fds, last);
+                    if(msg){
+                        resend_msg_to_everyone(msg, array_fds, last);
+                    } else {
+                        fprintf(stderr, "He recibido un mensaje invalido? \n");
+                    }
+
                     free(msg);
                 } else if (revents & POLLERR){
                     // Something happened?
@@ -71,8 +76,10 @@ void * handle_connections(void* args){
 }
 // Receives connected socket.
 
-void sighandler(int signal){
-    active = false;
+void sighandler(int signal, siginfo_t* info, void* ctx){
+    if(info->si_pid != 0)
+        active = false;
+
 }
 
 int main(int argc, const char* argv[]) {
@@ -90,7 +97,8 @@ int main(int argc, const char* argv[]) {
     socklen_t size = sizeof(datos_conn);
     struct sigaction sig;
     memset(&sig, 0, sizeof(sig));
-    sig.sa_handler = sighandler;
+    sig.sa_flags = SA_SIGINFO;
+    sig.sa_sigaction = sighandler;
     int retval = sigaction(SIGINT, &sig, NULL);
     if(retval){
         printf("No se intercepta sigint. :think:\n");
