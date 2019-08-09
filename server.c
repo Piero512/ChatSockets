@@ -2,6 +2,7 @@
 #include <pthread.h>
 #include <poll.h>
 #include <signal.h>
+#include <assert.h>
 #include "common.h"
 #include "stdlib.h"
 #include "string.h"
@@ -30,18 +31,14 @@ void * handle_connections(void* args){
     StsHeader* shared_queue = (StsHeader *) args;
     struct pollfd* array_fds = calloc(1024, sizeof(*array_fds));
     nfds_t last = 0;
-    bool open = true;
-    while(open){
+    while(active){
         // Check in a queue if there are new sockets to listen to.
         while(StsQueue.size(shared_queue) > 0){
             int* received_fd = StsQueue.pop(shared_queue);
             if (received_fd != NULL) {
-                if (*received_fd == -1) {
-                    open = false;
-                } else {
-                    (array_fds + last)->fd = *received_fd;
-                    (array_fds + last)->events = POLLIN;
-                }
+                assert(*received_fd > 0);
+                (array_fds + last)->fd = *received_fd;
+                (array_fds + last)->events = POLLIN;
                 last++;
             } else { // It's empty for some reason?
                 break;
@@ -77,9 +74,7 @@ void * handle_connections(void* args){
 // Receives connected socket.
 
 void sighandler(int signal, siginfo_t* info, void* ctx){
-    if(info->si_pid != 0)
-        active = false;
-
+    active = false;
 }
 
 int main(int argc, const char* argv[]) {
@@ -110,8 +105,16 @@ int main(int argc, const char* argv[]) {
         fprintf(stderr, "Error al crear el thread del servidor.");
         return 1;
     }
+    printf("Se ha iniciado el hilo del servidor.");
     while(active){
         int connected_fd = accept(sock_fd, (struct sockaddr *) &datos_conn, &size);
+        if(connected_fd > 0){
+            printf("Se ha conectado un cliente! IP: %s\n", inet_ntoa(datos_conn.sin_addr));;
+        } else {
+            printf("Accept retornó -1?");
+            active = false;
+            break;
+        }
         int* copy = malloc(sizeof(*copy));
         *copy = connected_fd;
         StsQueue.push(handle,copy);
